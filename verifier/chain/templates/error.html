@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="alert alert-danger">
+        <h4 class="alert-heading">Operation Failed</h4>
+        <p>{{ error }}</p>
+        <hr>
+        <a href="javascript:history.back()" class="btn btn-outline-danger">
+            <i class="fas fa-arrow-left"></i> Go Back
+        </a>
+    </div>
+</div>
+{% endblock %}

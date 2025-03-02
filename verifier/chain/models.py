@@ -4,6 +4,7 @@ import uuid
 import hashlib
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+from django.utils.timezone import make_naive
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -35,10 +36,13 @@ class Product(models.Model):
         return False
 
 class Organization(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(
+        User, 
+        on_delete=models.CASCADE,
+        related_name='organization'  # Access via user.organization
+    )
     public_key = models.TextField()
     private_key = models.TextField()
-
 class Transaction(models.Model):
     ACTION_CHOICES = [
     ('MANUFACTURED', 'Manufactured'),
@@ -47,30 +51,32 @@ class Transaction(models.Model):
     ('DELIVERED', 'Delivered to Store'),
     ('SHELVED', 'Shelved for Sale'),
     ]
+    actor = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE,
+        related_name='transactions'  # Access via user.transactions
+    )
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    actor = models.ForeignKey(User, on_delete=models.CASCADE)
+    # actor = models.ForeignKey(User, on_delete=models.CASCADE)
     action = models.CharField(max_length=50, choices=ACTION_CHOICES)
     timestamp = models.DateTimeField(auto_now_add=True)
     previous_hash = models.CharField(max_length=64)
     current_hash = models.CharField(max_length=64)
     signature = models.TextField()
 
-    def save(self, *args, **kwargs):
-        if not self.pk:
-            last_tx = Transaction.objects.filter(product=self.product).last()
-            self.previous_hash = last_tx.current_hash if last_tx else '0'*64
-            data = f"{self.previous_hash}{self.action}{self.timestamp}"
-            self.current_hash = hashlib.sha256(data.encode()).hexdigest()
-        super().save(*args, **kwargs)
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        
+        # Validate hash consistency
+        if self.pk:  # Existing instance
+            previous = Transaction.objects.get(pk=self.pk)
+            if self.current_hash != previous.current_hash:
+                raise ValidationError("Immutable field: current_hash")
 
-    def sign_transaction(self, private_key):
-        data = f"{self.previous_hash}{self.action}{self.timestamp}".encode()
-        signature = private_key.sign(
-            data,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256()
-        )
-        self.signature = signature.hex()
+    def save(self, *args, **kwargs):
+        # Prevent manual hash modification
+        if self.pk:
+            original = Transaction.objects.get(pk=self.pk)
+            if self.current_hash != original.current_hash:
+                raise ValueError("Hash modification prohibited")
+        super().save(*args, **kwargs)

@@ -68,7 +68,76 @@
                         </div>
                     </div>
                 </div>
-
+                {% if is_valid %}
+                <div class="alert alert-success">
+                    <h4><i class="fas fa-check-circle"></i> Chain Valid</h4>
+                    <ul class="mt-3">
+                        <li>All hashes match sequentially</li>
+                        <li>Digital signatures verified</li>
+                        {% if not product.is_recalled %}
+                        <li>No recall notices active</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                {% else %}
+                <div class="card mb-4">
+                    <div class="card-header">Hash Chain Analysis</div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>TX ID</th>
+                                        <th>Stored Hash</th>
+                                        <th>Calculated Hash</th>
+                                        <th>Status</th>
+                                        <th>Data String</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in chain_debug %}
+                                    <tr class="{% if item.match %}table-success{% else %}table-danger{% endif %}">
+                                        <td>#{{ item.transaction_id }}</td>
+                                        <td class="text-truncate" style="max-width: 150px;">
+                                            <code>{{ item.stored_hash }}</code>
+                                        </td>
+                                        <td class="text-truncate" style="max-width: 150px;">
+                                            <code>{{ item.calculated_hash }}</code>
+                                        </td>
+                                        <td>
+                                            {% if item.match %}
+                                            <i class="fas fa-check-circle text-success"></i>
+                                            {% else %}
+                                            <i class="fas fa-times-circle text-danger"></i>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-muted small">
+                                            <samp>{{ item.data_string }}</samp>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-danger">
+                    <h4><i class="fas fa-times-circle"></i> Chain Invalid</h4>
+                    <ul class="mt-3">
+                        {% for debug in debug_info %}
+                            {% if not debug.hash_match %}
+                            <li>Hash mismatch at Transaction #{{ debug.tx_id }}</li>
+                            {% endif %}
+                            {% if not debug.signature_valid %}
+                            <li>Invalid signature at Transaction #{{ debug.tx_id }}</li>
+                            {% endif %}
+                        {% endfor %}
+                        {% if product.is_recalled %}
+                        <li>Product has been recalled</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                {% endif %}
                 <div class="mt-4 d-flex gap-2">
                     <a href="/scan/" class="btn btn-outline-primary">
                         <i class="fas fa-qrcode"></i> Scan Another
