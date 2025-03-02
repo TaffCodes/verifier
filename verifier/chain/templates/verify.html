@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="mb-0">{{ product.name }}</h2>
+                    <span class="badge bg-{{ is_valid|yesno:'success,danger' }} status-badge">
+                        {{ is_valid|yesno:"VALID,INVALID" }}
+                    </span>
+                </div>
+
+                {% if product.is_recalled %}
+                <div class="alert alert-danger d-flex align-items-center">
+                    <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+                    <div>
+                        <h4 class="alert-heading">Product Recall Notice</h4>
+                        <p class="mb-0">{{ product.recall_reason }}</p>
+                        <small class="text-muted">Recall Date: {{ product.recall_date|date }}</small>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title text-muted">Product Details</h5>
+                                <dl class="mb-0">
+                                    <dt>Manufacturer</dt>
+                                    <dd>{{ product.manufacturer.get_full_name }}</dd>
+                                    
+                                    <dt>Created</dt>
+                                    <dd>{{ product.created_at|date }}</dd>
+                                    
+                                    <dt>UUID</dt>
+                                    <dd><code>{{ product.uuid }}</code></dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-8">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title text-muted mb-4">Supply Chain History</h5>
+                                <div class="timeline">
+                                    {% for tx in transactions %}
+                                    <div class="transaction-card card mb-3">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between">
+                                                <div>
+                                                    <h6 class="mb-1">{{ tx.action }}</h6>
+                                                    <small class="text-muted">{{ tx.timestamp|date:"M d, Y H:i" }}</small>
+                                                </div>
+                                                <div class="text-end">
+                                                    <small class="text-muted d-block">{{ tx.actor.username }}</small>
+                                                    <small class="text-muted">Block #{{ tx.id }}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 d-flex gap-2">
+                    <a href="/scan/" class="btn btn-outline-primary">
+                        <i class="fas fa-qrcode"></i> Scan Another
+                    </a>
+                    <a href="{% url 'export_pdf' product.uuid %}" class="btn btn-danger">
+                        <i class="fas fa-file-pdf"></i> Export PDF
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

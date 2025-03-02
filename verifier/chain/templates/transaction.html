@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-body">
+                <h3 class="card-title mb-4">Update Product Status</h3>
+                
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5>Product Details</h5>
+                        <p class="mb-1"><strong>Name:</strong> {{ product.name }}</p>
+                        <p class="mb-1"><strong>UUID:</strong> <code>{{ product.uuid }}</code></p>
+                    </div>
+                </div>
+
+                <form method="POST">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Select Action</label>
+                        <select name="action" class="form-select" required>
+                            <option value="">Choose an action...</option>
+                            {% for action in allowed_actions %}
+                            <option value="{{ action.0 }}">{{ action.1 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i> Record Transaction
+                        </button>
+                        <a href="/scan/" class="btn btn-outline-secondary">
+                            <i class="fas fa-qrcode me-2"></i> Scan Different Product
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
