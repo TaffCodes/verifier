@@ -86,11 +86,13 @@ def verify_product(request, uuid):
     product = get_object_or_404(Product, uuid=uuid)
     chain_debug = debug_hash_chain(product)
     is_valid = all([item['match'] for item in chain_debug])
+    transactions = Transaction.objects.filter(product=product)
     
     return render(request, 'verify.html', {
         'product': product,
         'is_valid': is_valid,
-        'chain_debug': chain_debug
+        'chain_debug': chain_debug,
+        'transactions': transactions
     })
 
 # chain/views.py
