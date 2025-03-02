@@ -15,4 +15,11 @@ urlpatterns = [
     path('', views.scan_qr, name='home'),
     path('transaction/<uuid:uuid>/add', views.add_transaction, name='add_transaction'),
     path('add_transaction/', views.add_transaction, name='add_transaction'),
+    path('product/new/', views.create_product, name='create_product'),
 ]
+
+
+from django.conf import settings
+from django.conf.urls.static import static
+
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -58,8 +58,8 @@
                                 required
                                 aria-label="Transaction action selection">
                             <option value="" disabled selected>Choose an action...</option>
-                            {% for value, label in allowed_actions %}
-                            <option value="{{ value }}">{{ label }}</option>
+                            {% for action in allowed_actions %}
+                                <option value="{{ action }}">{{ action }}</option>
                             {% endfor %}
                         </select>
                         <div class="invalid-feedback">

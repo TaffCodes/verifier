@@ -5,15 +5,34 @@ import hashlib
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
+from django.db import models
+from django.contrib.auth.models import User
+import uuid
+
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100)
-    manufacturer = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    manufacturer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='products_created')
     created_at = models.DateTimeField(auto_now_add=True)
+    current_stage = models.CharField(max_length=50, default='MANUFACTURED')
     qr_code = models.ImageField(upload_to='qrcodes/', blank=True)
-    is_recalled = models.BooleanField(default=False)
-    recall_reason = models.TextField(blank=True)
-    recall_date = models.DateTimeField(null=True, blank=True)
+
+    STAGE_CHOICES = [
+        ('MANUFACTURED', 'Manufactured'),
+        ('IN_TRANSIT', 'In Transit'),
+        ('RECEIVED_WAREHOUSE', 'Received at Warehouse'),
+        ('DELIVERED', 'Delivered to Retailer'),
+        ('SHELVED', 'Shelved for Sale'),
+        ('SOLD', 'Sold'),
+    ]
+
+    def update_stage(self, new_stage):
+        if new_stage in dict(self.STAGE_CHOICES):
+            self.current_stage = new_stage
+            self.save()
+            return True
+        return False
 
 class Organization(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)

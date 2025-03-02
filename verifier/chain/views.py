@@ -6,6 +6,8 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
+import hashlib
+from django.utils import timezone
 
 
 from django.contrib.auth import authenticate, login, logout
@@ -34,6 +36,39 @@ def logout_view(request):
     logout(request)
     return redirect('login')
 
+
+from django.contrib.auth.decorators import login_required, user_passes_test
+from .forms import ProductForm
+from .models import Product, Transaction
+
+def is_manufacturer(user):
+    return user.groups.filter(name='Manufacturer').exists()
+
+@login_required
+@user_passes_test(is_manufacturer)
+def create_product(request):
+    if request.method == 'POST':
+        form = ProductForm(request.POST)
+        if form.is_valid():
+            product = form.save(commit=False)
+            product.manufacturer = request.user
+            product.save()
+            
+            # Create initial transaction
+            Transaction.objects.create(
+                product=product,
+                actor=request.user,
+                action='MANUFACTURED',
+                previous_hash='0'*64,
+                current_hash=hashlib.sha256(f'GENESIS{product.uuid}'.encode()).hexdigest()
+            )
+            
+            return redirect('verify', uuid=product.uuid)
+    else:
+        form = ProductForm()
+    
+    return render(request, 'create_product.html', {'form': form})
+
 def scan_qr(request):
     return render(request, 'scan.html')
 
@@ -59,30 +94,40 @@ from django.shortcuts import redirect
 @login_required
 def add_transaction(request, uuid):
     product = get_object_or_404(Product, uuid=uuid)
-    
-    # Get allowed actions based on user role
     allowed_actions = []
-    if request.user.groups.filter(name='Manufacturer').exists():
-        allowed_actions = ['MANUFACTURED']
-    elif request.user.groups.filter(name='Distributor').exists():
-        allowed_actions = ['SHIPPED', 'RECEIVED_AT_WAREHOUSE']
-    elif request.user.groups.filter(name='Retailer').exists():
-        allowed_actions = ['DELIVERED', 'SHELVED']
     
+    if request.user.groups.filter(name='Manufacturer').exists():
+        allowed_actions = ['MANUFACTURED', 'SHIPPED']
+    elif request.user.groups.filter(name='Distributor').exists():
+        allowed_actions = ['IN_TRANSIT', 'RECEIVED_WAREHOUSE']
+    elif request.user.groups.filter(name='Retailer').exists():
+        allowed_actions = ['DELIVERED', 'SHELVED', 'SOLD']
+
     if request.method == 'POST':
         action = request.POST.get('action')
         if action in allowed_actions:
+            # Update product stage
+            product.update_stage(action)
+            
+            # Create transaction
+            last_transaction = product.transaction_set.last()
+            new_hash = hashlib.sha256(
+                f"{last_transaction.current_hash}{action}{timezone.now()}".encode()
+            ).hexdigest()
+            
             Transaction.objects.create(
                 product=product,
                 actor=request.user,
-                action=action
+                action=action,
+                previous_hash=last_transaction.current_hash,
+                current_hash=new_hash
             )
+            
             return redirect('verify', uuid=product.uuid)
-    
+
     return render(request, 'add_transaction.html', {
         'product': product,
-        'allowed_actions': Transaction.ACTION_CHOICES,  # Or filtered choices
-        'recent_transactions': Transaction.objects.filter(actor=request.user)[:5]
+        'allowed_actions': allowed_actions
     })
 
 

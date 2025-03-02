@@ -142,3 +142,5 @@ LOGOUT_REDIRECT_URL = '/login/'
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
+
+BASE_URL = 'https://7be8-102-215-12-244.ngrok-free.app'
