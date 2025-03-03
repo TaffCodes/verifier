@@ -61,20 +61,15 @@
 #     return chain
 
 
-# chain/utils.py
 import hashlib
 from django.utils.timezone import make_naive
 
 def verify_chain(product):
-    """
-    Simple function to always return True - we're not validating the chain
-    """
+
     return True
 
 def debug_hash_chain(product):
-    """
-    Generate debug info about the chain without validating
-    """
+
     transactions = product.transaction_set.all().order_by('timestamp')
     chain = []
     previous_hash = "0" * 64
