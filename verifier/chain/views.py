@@ -59,8 +59,8 @@ def create_product(request):
             
             # Create initial transaction
             # Ensure created_at is not None
-            created_at = product.created_at if product.created_at else timezone.now()
-            hash_input = f"{'0'*64}MANUFACTURED{str(created_at)}"
+            created_at = product.created_at if product.created_at else make_naive(timezone.now()).isoformat()
+            hash_input = f"{'0'*64}|MANUFACTURED|{str(created_at)}"
             current_hash = hashlib.sha256(hash_input.encode('utf-8')).hexdigest()
             
             Transaction.objects.create(
@@ -158,7 +158,7 @@ def add_transaction(request, uuid):
             if timestamp is None:
                 timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
                 
-            data_string = f"{previous_hash}{action}{timestamp.isoformat()}"
+            data_string = f"{previous_hash}|{action}|{timestamp.isoformat()}"
             current_hash = hashlib.sha256(data_string.encode()).hexdigest()
 
             # Ensure we have access to the organization's private key

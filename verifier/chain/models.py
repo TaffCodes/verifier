@@ -57,7 +57,6 @@ class Transaction(models.Model):
         related_name='transactions'  # Access via user.transactions
     )
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    # actor = models.ForeignKey(User, on_delete=models.CASCADE)
     action = models.CharField(max_length=50, choices=ACTION_CHOICES)
     timestamp = models.DateTimeField(auto_now_add=True)
     previous_hash = models.CharField(max_length=64)
