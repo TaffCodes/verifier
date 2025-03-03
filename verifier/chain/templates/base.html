@@ -24,6 +24,9 @@
                     <span class="badge bg-info me-3">
                         {{ user.groups.first.name|default:"User" }}
                     </span>
+                    <a href="{% url 'create_product' %}" class="btn btn-outline-light me-2">
+                        <i class="fas fa-plus-circle"></i> New Product
+                    </a>
                     <form action="{% url 'logout' %}" method="post" class="d-inline">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline-light">

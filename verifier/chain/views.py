@@ -1,11 +1,15 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse
-from .models import Product, Transaction
-from .utils import verify_chain
+from .models import Product, Transaction, Organization
+from .utils import verify_chain, debug_hash_chain
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
+import hashlib
+from django.utils import timezone
+import datetime
+from cryptography.hazmat.primitives import serialization
 
 
 from django.contrib.auth import authenticate, login, logout
@@ -34,57 +38,182 @@ def logout_view(request):
     logout(request)
     return redirect('login')
 
+
+from django.contrib.auth.decorators import login_required, user_passes_test
+from .forms import ProductForm
+from .models import Product, Transaction
+from django.utils.timezone import make_naive
+
+def is_manufacturer(user):
+    return user.groups.filter(name='Manufacturer').exists()
+
+@login_required
+@user_passes_test(is_manufacturer)
+def create_product(request):
+    if request.method == 'POST':
+        form = ProductForm(request.POST)
+        if form.is_valid():
+            product = form.save(commit=False)
+            product.manufacturer = request.user
+            product.save()
+            
+            # Create initial transaction
+            # Ensure created_at is not None
+            created_at = product.created_at if product.created_at else make_naive(timezone.now()).isoformat()
+            hash_input = f"{'0'*64}|MANUFACTURED|{str(created_at)}"
+            current_hash = hashlib.sha256(hash_input.encode('utf-8')).hexdigest()
+            
+            Transaction.objects.create(
+                product=product,
+                actor=request.user,
+                action='MANUFACTURED',
+                previous_hash='0'*64,
+                current_hash=current_hash,
+                timestamp=make_naive(timezone.now()).isoformat()  # Explicitly set timestamp
+            )
+            
+            return redirect('verify', uuid=product.uuid)
+    else:
+        form = ProductForm()
+    
+    return render(request, 'create_product.html', {'form': form})
+
 def scan_qr(request):
     return render(request, 'scan.html')
 
-def verify_product(request, uuid=None):
-    if request.method == "GET" and 'uuid' in request.GET:
-        uuid = request.GET['uuid']
-    
+# chain/views.py
+def verify_product(request, uuid):
     product = get_object_or_404(Product, uuid=uuid)
-    is_valid = verify_chain(product)
+    chain_debug = debug_hash_chain(product)
+    is_valid = all([item['match'] for item in chain_debug])
+    transactions = Transaction.objects.filter(product=product)
     
     return render(request, 'verify.html', {
         'product': product,
         'is_valid': is_valid,
-        'transactions': product.transaction_set.all().order_by('timestamp'),
-        'is_authenticated': request.user.is_authenticated
+        'chain_debug': chain_debug,
+        'transactions': transactions
     })
 
-
+# chain/views.py
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import Group
-from django.shortcuts import redirect
+from django.utils import timezone
+from .models import Product, Transaction
+import hashlib
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
+
 
 @login_required
 def add_transaction(request, uuid):
+    try:
+        org = request.user.organization
+    except Organization.DoesNotExist:
+        return render(request, 'error.html', {
+            'error': 'User organization not found'
+        })
+    # Get the product and verify existence
     product = get_object_or_404(Product, uuid=uuid)
     
-    # Get allowed actions based on user role
+    # Determine allowed actions based on user role
+    user_group = request.user.groups.first()
+    if user_group is None:
+        return render(request, 'error.html', {'error': 'User has no assigned role'})
+        
     allowed_actions = []
-    if request.user.groups.filter(name='Manufacturer').exists():
-        allowed_actions = ['MANUFACTURED']
-    elif request.user.groups.filter(name='Distributor').exists():
-        allowed_actions = ['SHIPPED', 'RECEIVED_AT_WAREHOUSE']
-    elif request.user.groups.filter(name='Retailer').exists():
-        allowed_actions = ['DELIVERED', 'SHELVED']
     
+    if user_group.name == 'Manufacturer':
+        allowed_actions = ['MANUFACTURED']
+    elif user_group.name == 'Distributor':
+        allowed_actions = ['SHIPPED', 'RECEIVED AT WAREHOUSE']
+    elif user_group.name == 'Retailer':
+        allowed_actions = ['DELIVERED', 'SHELVED', 'SOLD']
+    else:
+        return render(request, 'error.html', {'error': 'Invalid user role'})
+
     if request.method == 'POST':
         action = request.POST.get('action')
-        if action in allowed_actions:
-            Transaction.objects.create(
+        
+        # Validate allowed action
+        if action not in allowed_actions:
+            return render(request, 'error.html', 
+                        {'error': 'Invalid action for your role'})
+
+        try:
+            # Get previous transaction
+            last_transaction = Transaction.objects.filter(
+                product=product
+            ).latest('timestamp')
+            
+            previous_hash = last_transaction.current_hash
+        except Transaction.DoesNotExist:
+            # Handle genesis transaction
+            previous_hash = '0' * 64
+
+        try:
+            # Calculate new hash - ensure timestamp is timezone-aware
+            timestamp = timezone.now()
+            if timestamp is None:
+                timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
+                
+            data_string = f"{previous_hash}|{action}|{timestamp.isoformat()}"
+            current_hash = hashlib.sha256(data_string.encode()).hexdigest()
+
+            # Ensure we have access to the organization's private key
+            if not hasattr(request.user, 'organization') or request.user.organization is None:
+                return render(request, 'error.html', {'error': 'User has no associated organization'})
+                
+            org = request.user.organization
+            if not org.private_key:
+                return render(request, 'error.html', {'error': 'Organization has no private key'})
+
+            # Get organization's private key
+            private_key = serialization.load_pem_private_key(
+                org.private_key.encode(),
+                password=None
+            )
+
+            # Create and sign transaction
+            transaction = Transaction.objects.create(
                 product=product,
                 actor=request.user,
-                action=action
+                action=action,
+                previous_hash=previous_hash,
+                current_hash=current_hash,
+                timestamp=timestamp
             )
+
+            # Generate digital signature
+            signature = private_key.sign(
+                data_string.encode(),
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+            transaction.signature = signature.hex()
+            transaction.save()
+
+            # Update product status
+            product.current_stage = action
+            product.save()
+
             return redirect('verify', uuid=product.uuid)
-    
+
+        except Exception as e:
+            import traceback
+            traceback_str = traceback.format_exc()
+            return render(request, 'error.html',
+                        {'error': f'Transaction failed: {str(e)}', 'traceback': traceback_str})
+
+    # GET request - show form
     return render(request, 'add_transaction.html', {
         'product': product,
-        'allowed_actions': Transaction.ACTION_CHOICES,  # Or filtered choices
-        'recent_transactions': Transaction.objects.filter(actor=request.user)[:5]
+        'allowed_actions': allowed_actions
     })
-
 
 def export_pdf(request, uuid):
     product = get_object_or_404(Product, uuid=uuid)
