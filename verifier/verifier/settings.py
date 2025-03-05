@@ -28,10 +28,9 @@ DEBUG = True
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    '7be8-102-215-12-244.ngrok-free.app'
 ]
 
-CSRF_TRUSTED_ORIGINS = ['https://7be8-102-215-12-244.ngrok-free.app']
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000']
 
 # Application definition
 
@@ -143,4 +142,4 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-BASE_URL = 'https://7be8-102-215-12-244.ngrok-free.app'
+BASE_URL = 'http://localhost:8000'
