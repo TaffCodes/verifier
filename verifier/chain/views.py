@@ -81,6 +81,9 @@ def create_product(request):
 def scan_qr(request):
     return render(request, 'scan.html')
 
+def landing(request):
+    return render(request, 'landing.html')
+
 # chain/views.py
 def verify_product(request, uuid):
     product = get_object_or_404(Product, uuid=uuid)
@@ -217,47 +220,210 @@ def add_transaction(request, uuid):
 
 def export_pdf(request, uuid):
     product = get_object_or_404(Product, uuid=uuid)
-    transactions = product.transaction_set.all()
+    transactions = product.transaction_set.all().order_by('timestamp')
+    chain_debug = debug_hash_chain(product)
+    is_valid = all([item['match'] for item in chain_debug])
     
     response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="{product.name}_report.pdf"'
+    response['Content-Disposition'] = f'attachment; filename="{product.name}_verification.pdf"'
     
+    # Create PDF document
     p = canvas.Canvas(response, pagesize=letter)
     width, height = letter
     
-    # Header
-    p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, height-50, f"Supply Chain Report: {product.name}")
-    p.setFont("Helvetica", 12)
-    p.drawString(50, height-80, f"UUID: {product.uuid}")
+    # Add security watermark
+    p.saveState()
+    p.setFillColor(colors.HexColor('#f1f1f180'))  # Semi-transparent
+    p.setFont("Helvetica-Bold", 32)
+    p.rotate(45)
+    p.drawString(250, -150, "CHAINVERIFY SECURE DOCUMENT")
+    p.rotate(-45)
+    p.restoreState()
+
+    # Header Section
+    p.setFillColor(colors.HexColor('#212529'))
+    p.rect(0, height-100, width, 100, fill=1, stroke=0)
     
-    # Table Data
-    data = [["Timestamp", "Actor", "Action"]]
-    for tx in transactions:
+    # Logo and header text
+    p.setFillColor(colors.white)
+    p.setFont("Helvetica-Bold", 28)
+    p.drawString(50, height-50, "ChainVerify")
+    p.setFont("Helvetica", 12)
+    p.drawString(50, height-70, "Blockchain-based Supply Chain Verification")
+    
+
+    
+    # Validation badge
+    badge_color = colors.HexColor('#28a745') if is_valid else colors.HexColor('#dc3545')
+    status_text = "VALID" if is_valid else "INVALID"
+    p.setFillColor(badge_color)
+    p.roundRect(width-150, height-60, 100, 30, 10, fill=1, stroke=0)
+    p.setFillColor(colors.white)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawCentredString(width-100, height-51, status_text)
+    
+    # Report generation info
+    p.setFillColor(colors.black)
+    p.setFont("Helvetica", 10)
+    p.drawRightString(width-50, height-110, 
+                     f"Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # Product Details Section
+    y_position = height - 140
+    p.setFillColor(colors.HexColor('#f8f9fa'))
+    p.roundRect(50, y_position-120, width-100, 100, 10, fill=1, stroke=0)
+    p.setStrokeColor(colors.HexColor('#dee2e6'))
+    p.roundRect(50, y_position-120, width-100, 100, 10, fill=0, stroke=1)
+
+    # QR Code Handling with fallback
+    qr_drawn = False
+    if product.qr_code:
+        try:
+            from PIL import Image
+            import os
+            if os.path.exists(product.qr_code.path):
+                p.drawInlineImage(product.qr_code.path, 60, y_position-110, 
+                                width=80, height=80)
+                qr_drawn = True
+        except Exception as e:
+            pass
+    
+    if not qr_drawn:
+        p.setFillColor(colors.HexColor('#dc3545'))
+        p.setFont("Helvetica", 8)
+        p.drawString(60, y_position-110, "QR Code Unavailable")
+
+    # Product Details Table
+    manufacturer_name = (product.manufacturer.get_full_name() 
+                        if hasattr(product.manufacturer, 'get_full_name') 
+                        else product.manufacturer.username)
+    
+    product_data = [
+        ["Manufacturer:", manufacturer_name],
+        ["Created:", product.created_at.strftime('%Y-%m-%d')],
+        ["UUID:", str(product.uuid)],
+        ["Current Stage:", product.current_stage]
+    ]
+    
+    product_table = Table(product_data, colWidths=[80, 200])
+    product_table.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+    ]))
+    product_table.wrapOn(p, 200, 100)
+    product_table.drawOn(p, 160, y_position-110)
+
+    # Transaction History Section
+    y_position -= 140
+    p.setFont("Helvetica-Bold", 14)
+    p.drawString(50, y_position, "Supply Chain Transaction History")
+
+    # Transaction Table
+    data = [["Timestamp", "Actor", "Action", "Status"]]
+    for i, tx in enumerate(transactions):
+        is_tx_valid = i >= len(chain_debug) or chain_debug[i]['match']
+        status_symbol = "✓" if is_tx_valid else "✗"
         data.append([
             tx.timestamp.strftime("%Y-%m-%d %H:%M"),
             tx.actor.username,
-            tx.action
+            tx.action,
+            status_symbol
         ])
-    
-    # Create Table
-    table = Table(data, colWidths=[150, 150, 250])
+
+    table = Table(data, colWidths=[120, 120, 170, 40])
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#212529')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-        ('FONTSIZE', (0,0), (-1,0), 12),
-        ('BOTTOMPADDING', (0,0), (-1,0), 12),
-        ('BACKGROUND', (0,1), (-1,-1), colors.HexColor('#f8f9fa')),
-        ('GRID', (0,0), (-1,-1), 1, colors.HexColor('#dee2e6'))
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#212529')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#f8f9fa'), colors.white]),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#dee2e6')),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#212529')),
+        ('TEXTCOLOR', (3, 1), (3, -1), colors.HexColor('#28a745')),
+        ('ALIGN', (3, 0), (3, -1), 'CENTER'),
+        ('FONTNAME', (3, 1), (3, -1), 'Helvetica-Bold'),
+        ('WORDWRAP', (2,1), (2,-1), 'LTR'),
     ]))
+
+    # Highlight invalid transactions
+    for i, row in enumerate(data[1:], 1):
+        tx_idx = i - 1
+        if tx_idx < len(chain_debug) and not chain_debug[tx_idx]['match']:
+            table.setStyle(TableStyle([
+                ('TEXTCOLOR', (3, i), (3, i), colors.HexColor('#dc3545')),
+                ('BACKGROUND', (0, i), (-1, i), colors.HexColor('#fff5f5'))
+            ]))
+
+    # Draw table
+    table_height = len(data) * 20 + 20
+    table.wrapOn(p, width-100, table_height)
+    table.drawOn(p, 50, y_position - 20 - table_height)
+
+    # Validation Summary Footer
+    y_position = 80
+    footer_color = colors.HexColor('#d4edda') if is_valid else colors.HexColor('#f8d7da')
+    border_color = colors.HexColor('#c3e6cb') if is_valid else colors.HexColor('#f5c6cb')
     
-    # Draw Table
-    table.wrapOn(p, width-100, height)
-    table.drawOn(p, 50, height-150)
+    p.setFillColor(footer_color)
+    p.setStrokeColor(border_color)
+    p.roundRect(50, 30, width-100, y_position, 10, fill=1, stroke=1)
     
+    text_color = colors.HexColor('#155724') if is_valid else colors.HexColor('#721c24')
+    p.setFillColor(text_color)
+    
+    # Validation details
+    validation_details = []
+    if is_valid:
+        validation_details = [
+            ("✓", "Verification Successful"),
+            ("•", f"All {len(transactions)} transaction hashes match blockchain records"),
+            ("•", "Complete chain of custody verified"),
+        ]
+    else:
+        mismatch_count = sum(1 for item in chain_debug if not item['match'])
+        validation_details = [
+            ("✗", "Verification Failed"),
+            ("•", f"{mismatch_count} hash mismatch(es) detected"),
+            ("•", f"{len(transactions)-mismatch_count} valid transactions"),
+            ("•", "Chain integrity cannot be verified")
+        ]
+    
+    y_text = y_position - 0
+    p.setFont("Helvetica-Bold", 14)
+    p.drawString(70, y_text, f"{validation_details[0][0]} {validation_details[0][1]}")
+    y_text -= 10
+    
+    p.setFont("Helvetica", 10)
+    for detail in validation_details[1:]:
+        p.drawString(75, y_text, f"{detail[0]} {detail[1]}")
+        y_text -= 20
+
+    # Page numbering
+    p.setFont("Helvetica", 9)
+    p.setFillColor(colors.black)
+    p.drawString(width/2 - 20, 15, f"Page 1 of 1")
+
     p.save()
     return response
+
+
+def verify_product_by_query(request):
+    uuid = request.GET.get('uuid')
+    if uuid:
+        return redirect('verify', uuid=uuid)
+    return redirect('scan_qr')
+
+def add_transaction_by_query(request):
+    uuid = request.GET.get('uuid')
+    if uuid:
+        return redirect('add_transaction', uuid=uuid)
+    return redirect('scan_qr')
 
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 # chain/utils.py

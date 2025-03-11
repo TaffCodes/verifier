@@ -30,11 +30,11 @@
                 <div class="row g-4">
                     <div class="col-md-{% if user.is_authenticated %}6{% else %}12{% endif %}">
                         <div class="card h-100">
-                            <!-- <div class="card-body">
+                            <div class="card-body">
                                 <h5 class="text-muted mb-3">
                                     <i class="fas fa-hand-pointer me-2"></i>Manual Entry
                                 </h5>
-                                <form action="{% if user.is_authenticated %}/transaction/{% else %}/verify/{% endif %}" 
+                                <form action="{% if user.is_authenticated %}{% url 'add_transaction' %}{% else %}{% url 'verify' %}{% endif %}" 
                                       method="GET" 
                                       class="needs-validation" 
                                       novalidate>
@@ -60,7 +60,7 @@
                                         </select>
                                     </div>
                                     {% endif %}
-
+                                
                                     <button type="submit" class="btn btn-primary w-100">
                                         <i class="fas fa-arrow-right me-2"></i>
                                         {% if user.is_authenticated %}Record Transaction{% else %}Verify Product{% endif %}
@@ -68,7 +68,7 @@
                                 </form>
                             </div>
                         </div>
-                    </div> -->
+                    </div>
 
                     {% if user.is_authenticated %}
                     <div class="col-md-6">
