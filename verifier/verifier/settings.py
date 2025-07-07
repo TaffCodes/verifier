@@ -100,17 +100,22 @@ load_dotenv()
 # Replace the DATABASES section of your settings.py with this
 tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': tmpPostgres.path.replace('/', ''),
-        'USER': tmpPostgres.username,
-        'PASSWORD': tmpPostgres.password,
-        'HOST': tmpPostgres.hostname,
-        'PORT': 5432,
-        'OPTIONS': dict(parse_qsl(tmpPostgres.query)),
+db_url = os.getenv('DATABASE_URL')
+
+if db_url:
+    # If DATABASE_URL is provided (e.g. in production)
+    db_url_parsed = urlparse(db_url)
+    
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': db_url_parsed.path.replace('/', ''),
+            'USER': db_url_parsed.username,
+            'PASSWORD': db_url_parsed.password,
+            'HOST': db_url_parsed.hostname,
+            'PORT': 5432,
+        }
     }
-}
 
 
 # Password validation
