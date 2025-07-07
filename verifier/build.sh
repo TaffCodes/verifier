@@ -10,6 +10,6 @@ mkdir -p media/qrcodes
 # Run migrations
 python manage.py makemigrations
 python manage.py migrate
-
+python manage.py createsuperuser_if_none_exists
 
 chmod +x build.sh
