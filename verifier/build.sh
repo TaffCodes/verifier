@@ -8,6 +8,7 @@ pip install -r requirements.txt
 mkdir -p media/qrcodes
 
 # Run migrations
+python manage.py makemigrations
 python manage.py migrate
 
 
