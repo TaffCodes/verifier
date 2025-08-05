@@ -27,7 +27,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
     'localhost',
-    '127.0.0.1',
+    'verifier.paymentsoverflow
+com',
     '7be8-102-215-12-244.ngrok-free.app'
 ]
 
