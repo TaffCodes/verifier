@@ -27,12 +27,12 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
     'localhost',
-    'verifier.paymentsoverflow
-com',
+    'verifier.paymentsoverflow.com',
     '7be8-102-215-12-244.ngrok-free.app'
 ]
 
-CSRF_TRUSTED_ORIGINS = ['https://7be8-102-215-12-244.ngrok-free.app']
+CSRF_TRUSTED_ORIGINS = ['https://7be8-102-215-12-244.ngrok-free.app',
+                       'https://verifier.paymentsoverflow.com']
 
 # Application definition
 
