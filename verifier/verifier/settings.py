@@ -19,9 +19,10 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     'verifier-cryptographically-secure.onrender.com',
+    'verifier.paymentsoverflow.com',
 ]
 
-CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'https://verifier-cryptographically-secure.onrender.com']
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'https://verifier-cryptographically-secure.onrender.com', 'https://verifier.paymentsoverflow.com']
 
 # Application definition
 
