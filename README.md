@@ -88,7 +88,7 @@ Then in the `psql` prompt:
 ```sql
 CREATE DATABASE supplychain;
 -- If you want to set the password to match settings.py:
-ALTER USER postgres WITH PASSWORD 'aaabbb';
+ALTER USER postgres WITH PASSWORD 'aaabbb.';
 ```
 
 Exit:
